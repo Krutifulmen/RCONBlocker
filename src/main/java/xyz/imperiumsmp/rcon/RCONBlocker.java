@@ -5,32 +5,40 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class RCONBlocker extends JavaPlugin {
-
+    
     private Set<String> allowedIPs = new HashSet<>();
     private boolean blockAll = true;
     private boolean debug = false;
-    private int checkInterval = 10;
-    private Map<String, Integer> connectionAttempts = new HashMap<>();
+    private ServerSocketInterceptor interceptor;
+    private final Map<String, Long> blockedIPs = new ConcurrentHashMap<>();
     
     @Override
     public void onEnable() {
         saveDefaultConfig();
         loadConfig();
         
-        getLogger().info("RCONBlocker запущен. Режим: " + (blockAll ? "Блокировка всех" : "Белый список"));
+        getLogger().info("RCONBlocker запущен. Режим: " + (blockAll ? "БЛОКИРОВКА ВСЕХ" : "БЕЛЫЙ СПИСОК"));
         
-        startMonitoring();
+        try {
+            interceptRCON();
+            getLogger().info("Перехват RCON активирован");
+        } catch (Exception e) {
+            getLogger().severe("Не удалось перехватить RCON: " + e.getMessage());
+        }
         
         getCommand("rconblocker").setExecutor(this);
     }
@@ -41,7 +49,6 @@ public final class RCONBlocker extends JavaPlugin {
         
         blockAll = config.getBoolean("block-all", true);
         debug = config.getBoolean("debug", false);
-        checkInterval = config.getInt("check-interval", 10);
         
         allowedIPs.clear();
         allowedIPs.addAll(config.getStringList("allowed-ips"));
@@ -51,121 +58,56 @@ public final class RCONBlocker extends JavaPlugin {
         }
     }
     
-    private void startMonitoring() {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                try {
-                    blockUnauthorizedConnections();
-                } catch (Exception e) {
-                    if (debug) {
-                        getLogger().warning("Ошибка мониторинга: " + e.getMessage());
-                    }
-                }
-            }
-        }.runTaskTimer(this, 0L, checkInterval);
-    }
-    
-    private void blockUnauthorizedConnections() {
+    private void interceptRCON() throws Exception {
+        Object minecraftServer = Bukkit.getServer().getClass().getMethod("getServer").invoke(Bukkit.getServer());
+        
+        Object rconThread = null;
         try {
-            Object server = Bukkit.getServer().getClass().getMethod("getServer").invoke(Bukkit.getServer());
-            
-            Object rconThread = null;
-            try {
-                rconThread = server.getClass().getMethod("getRconThread").invoke(server);
-            } catch (Exception e) {
-                return;
-            }
-            
-            if (rconThread == null) {
-                return;
-            }
-            
-            Field clientsField = findField(rconThread.getClass(), "clients", "b", "clientList", "c");
-            if (clientsField == null) {
-                return;
-            }
-            
-            clientsField.setAccessible(true);
-            Object clients = clientsField.get(rconThread);
-            
-            if (clients instanceof Collection) {
-                processClients((Collection<?>) clients);
-            }
-            
+            rconThread = minecraftServer.getClass().getMethod("getRconThread").invoke(minecraftServer);
         } catch (Exception e) {
-            if (debug) {
-                getLogger().warning("Ошибка: " + e.getMessage());
-            }
+            getLogger().warning("RCON не активирован");
+            return;
         }
+        
+        if (rconThread == null) {
+            return;
+        }
+        
+        Field serverSocketField = findField(rconThread.getClass(), "serverSocket", "a", "socket");
+        if (serverSocketField == null) {
+            getLogger().warning("Не найден ServerSocket в RCON");
+            return;
+        }
+        
+        serverSocketField.setAccessible(true);
+        ServerSocket originalSocket = (ServerSocket) serverSocketField.get(rconThread);
+        
+        if (originalSocket == null) {
+            getLogger().warning("ServerSocket равен null");
+            return;
+        }
+        
+        int port = originalSocket.getLocalPort();
+        InetAddress bindAddr = originalSocket.getInetAddress();
+        
+        originalSocket.close();
+        
+        interceptor = new ServerSocketInterceptor(port, bindAddr, this);
+        serverSocketField.set(rconThread, interceptor);
+        
+        getLogger().info("RCON перехвачен на порту " + port);
     }
     
-    private void processClients(Collection<?> clients) {
-        List<Object> toRemove = new ArrayList<>();
-        
-        for (Object client : clients) {
+    private Field findField(Class<?> clazz, String... names) {
+        for (String name : names) {
             try {
-                Socket socket = getSocket(client);
-                if (socket == null || socket.isClosed()) {
-                    continue;
-                }
-                
-                InetSocketAddress address = (InetSocketAddress) socket.getRemoteSocketAddress();
-                if (address == null) {
-                    continue;
-                }
-                
-                String ip = address.getAddress().getHostAddress();
-                
-                if (!isIPAllowed(ip)) {
-                    blockConnection(socket, ip, client);
-                    toRemove.add(client);
-                }
-                
-            } catch (Exception e) {
-                if (debug) {
-                    getLogger().warning("Ошибка обработки клиента: " + e.getMessage());
-                }
-            }
-        }
-        
-        try {
-            if (clients instanceof List) {
-                ((List<?>) clients).removeAll(toRemove);
-            } else {
-                clients.removeAll(toRemove);
-            }
-        } catch (Exception e) {
-        }
-    }
-    
-    private Socket getSocket(Object client) throws Exception {
-        Field socketField = findField(client.getClass(), "socket", "c", "connection", "sock");
-        if (socketField == null) {
-            return null;
-        }
-        
-        socketField.setAccessible(true);
-        Object socketObj = socketField.get(client);
-        
-        if (socketObj instanceof Socket) {
-            return (Socket) socketObj;
-        }
-        
-        return null;
-    }
-    
-    private Field findField(Class<?> clazz, String... fieldNames) {
-        for (String fieldName : fieldNames) {
-            try {
-                return clazz.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException e) {
-            }
+                return clazz.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {}
         }
         return null;
     }
     
-    private boolean isIPAllowed(String ip) {
+    public boolean isAllowed(String ip) {
         if (blockAll) {
             return false;
         }
@@ -174,16 +116,21 @@ public final class RCONBlocker extends JavaPlugin {
             return false;
         }
         
+        if (allowedIPs.contains(ip)) {
+            return true;
+        }
+        
+        if (ip.equals("127.0.0.1") && allowedIPs.contains("localhost")) {
+            return true;
+        }
+        
         for (String allowed : allowedIPs) {
-            if (allowed.equals(ip) || allowed.equals("*")) {
+            if (allowed.equals("*")) {
                 return true;
             }
-            if (allowed.equalsIgnoreCase("localhost") && 
-                (ip.equals("127.0.0.1") || ip.equals("0:0:0:0:0:0:0:1"))) {
-                return true;
-            }
+            
             if (allowed.contains("/")) {
-                if (checkSubnet(ip, allowed)) {
+                if (isInSubnet(ip, allowed)) {
                     return true;
                 }
             }
@@ -192,7 +139,7 @@ public final class RCONBlocker extends JavaPlugin {
         return false;
     }
     
-    private boolean checkSubnet(String ip, String subnet) {
+    private boolean isInSubnet(String ip, String subnet) {
         try {
             String[] parts = subnet.split("/");
             if (parts.length != 2) return false;
@@ -219,22 +166,20 @@ public final class RCONBlocker extends JavaPlugin {
         }
     }
     
-    private void blockConnection(Socket socket, String ip, Object client) {
-        try {
-            socket.close();
-            
-            int attempts = connectionAttempts.getOrDefault(ip, 0) + 1;
-            connectionAttempts.put(ip, attempts);
-            
-            getLogger().warning("Блокировка RCON от " + ip + " (попытка " + attempts + ")");
+    public void logBlock(String ip) {
+        long now = System.currentTimeMillis();
+        Long lastBlock = blockedIPs.get(ip);
+        
+        if (lastBlock == null || now - lastBlock > 60000) {
+            getLogger().warning("БЛОКИРОВКА RCON от " + ip);
             
             String message = "§c[RCON] Блокировка от " + ip;
             Bukkit.getOnlinePlayers().stream()
                 .filter(p -> p.isOp())
                 .forEach(p -> p.sendMessage(message));
-                
-        } catch (IOException e) {
         }
+        
+        blockedIPs.put(ip, now);
     }
     
     @Override
@@ -248,13 +193,13 @@ public final class RCONBlocker extends JavaPlugin {
         
         if (args.length == 0) {
             sender.sendMessage("§6RCONBlocker Команды:");
-            sender.sendMessage("§f/rconblocker reload - Перезагрузить");
-            sender.sendMessage("§f/rconblocker list - Список IP");
-            sender.sendMessage("§f/rconblocker add <IP> - Добавить IP");
-            sender.sendMessage("§f/rconblocker remove <IP> - Удалить IP");
-            sender.sendMessage("§f/rconblocker mode <whitelist|blockall> - Режим");
-            sender.sendMessage("§f/rconblocker status - Статус");
-            sender.sendMessage("§fТекущий режим: " + (blockAll ? "§cБлокировка всех" : "§aБелый список"));
+            sender.sendMessage("§f/rconblocker reload");
+            sender.sendMessage("§f/rconblocker list");
+            sender.sendMessage("§f/rconblocker add <IP>");
+            sender.sendMessage("§f/rconblocker remove <IP>");
+            sender.sendMessage("§f/rconblocker mode <whitelist|blockall>");
+            sender.sendMessage("§f/rconblocker status");
+            sender.sendMessage("§fТекущий режим: " + (blockAll ? "§cБЛОКИРОВКА ВСЕХ" : "§aБЕЛЫЙ СПИСОК"));
             return true;
         }
         
@@ -339,7 +284,14 @@ public final class RCONBlocker extends JavaPlugin {
                 sender.sendMessage("§6Статус RCONBlocker:");
                 sender.sendMessage("§fРежим: " + (blockAll ? "§cБлокировка всех" : "§aБелый список"));
                 sender.sendMessage("§fРазрешенных IP: §e" + allowedIPs.size());
-                sender.sendMessage("§fПопыток подключений: §e" + connectionAttempts.size());
+                sender.sendMessage("§fЗаблокированных IP: §e" + blockedIPs.size());
+                break;
+                
+            case "debug":
+                debug = !debug;
+                getConfig().set("debug", debug);
+                saveConfig();
+                sender.sendMessage("§aDebug: " + (debug ? "ВКЛ" : "ВЫКЛ"));
                 break;
                 
             default:
@@ -352,6 +304,42 @@ public final class RCONBlocker extends JavaPlugin {
     
     @Override
     public void onDisable() {
+        if (interceptor != null) {
+            try {
+                interceptor.close();
+            } catch (IOException ignored) {}
+        }
         getLogger().info("RCONBlocker выключен");
+    }
+    
+    private static class ServerSocketInterceptor extends ServerSocket {
+        private final RCONBlocker plugin;
+        private final ServerSocket original;
+        
+        public ServerSocketInterceptor(int port, InetAddress bindAddr, RCONBlocker plugin) throws IOException {
+            super(port, 50, bindAddr);
+            this.plugin = plugin;
+            this.original = null;
+        }
+        
+        @Override
+        public Socket accept() throws IOException {
+            while (true) {
+                Socket socket = super.accept();
+                String ip = socket.getInetAddress().getHostAddress();
+                
+                if (plugin.isAllowed(ip)) {
+                    if (plugin.debug) {
+                        plugin.getLogger().info("Разрешено RCON от " + ip);
+                    }
+                    return socket;
+                } else {
+                    plugin.logBlock(ip);
+                    try {
+                        socket.close();
+                    } catch (IOException ignored) {}
+                }
+            }
+        }
     }
 }

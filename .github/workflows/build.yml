@@ -28,7 +28,7 @@ jobs:
       - name: Install Gradle
         uses: gradle/gradle-build-action@v2
         with:
-          gradle-version: 8.3.1   # последняя стабильная версия
+          gradle-version: 8.14.3   # последняя стабильная версия
 
       # 4️⃣ Делаем wrapper, если его нет
       - name: Generate Gradle Wrapper if missing

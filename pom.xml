@@ -11,6 +11,7 @@
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <repositories>
@@ -21,8 +22,7 @@
     </repositories>
 
     <dependencies>
-
-        <!-- Bukkit API -->
+        <!-- Paper API (без NMS) -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
@@ -30,14 +30,25 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- 💥 ВОТ ЭТО ДАЁТ NMS -->
+        <!-- Если нужен доступ к NMS - используем reobf-вариант -->
+        <!-- Только для Paper 1.20.4 и ниже:
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper</artifactId>
-            <version>1.21.1-R0.1-SNAPSHOT</version>
+            <version>1.20.4-R0.1-SNAPSHOT</version>
             <classifier>mojang-mapped</classifier>
             <scope>provided</scope>
         </dependency>
-
+        -->
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+            </plugin>
+        </plugins>
+    </build>
 </project>

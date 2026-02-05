@@ -9,11 +9,10 @@
     <packaging>jar</packaging>
 
     <properties>
-        <java.version>21</java.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
     </properties>
 
-    <!-- Обычные зависимости -->
     <repositories>
         <repository>
             <id>papermc</id>
@@ -21,50 +20,24 @@
         </repository>
     </repositories>
 
-    <!-- ВОТ ЭТО КЛЮЧЕВОЕ -->
-    <pluginRepositories>
-        <pluginRepository>
-            <id>papermc</id>
-            <url>https://repo.papermc.io/repository/maven-public/</url>
-        </pluginRepository>
-    </pluginRepositories>
-
     <dependencies>
+
+        <!-- Bukkit API -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
             <version>1.21.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
+
+        <!-- 💥 ВОТ ЭТО ДАЁТ NMS -->
+        <dependency>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper</artifactId>
+            <version>1.21.1-R0.1-SNAPSHOT</version>
+            <classifier>mojang-mapped</classifier>
+            <scope>provided</scope>
+        </dependency>
+
     </dependencies>
-
-    <build>
-        <plugins>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
-                <configuration>
-                    <source>21</source>
-                    <target>21</target>
-                </configuration>
-            </plugin>
-
-            <!-- Paperweight даёт доступ к net.minecraft.server -->
-            <plugin>
-                <groupId>io.papermc.paperweight</groupId>
-                <artifactId>paperweight-userdev</artifactId>
-                <version>1.5.11</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>reobf</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
-        </plugins>
-    </build>
 </project>

@@ -1,8 +1,6 @@
 package xyz.imperiumsmp.rcon;
 
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.rcon.RconClient;
-
 import java.lang.reflect.Field;
 import java.net.Socket;
 import java.util.List;
@@ -20,13 +18,13 @@ public class RconInjector {
             Field clientsField = rconThread.getClass().getDeclaredField("clients");
             clientsField.setAccessible(true);
 
-            List<RconClient> clients = (List<RconClient>) clientsField.get(rconThread);
+            List<?> clients = (List<?>) clientsField.get(rconThread);
 
             new Thread(() -> {
                 while (true) {
                     try {
-                        for (RconClient client : clients) {
-                            Field socketField = RconClient.class.getDeclaredField("socket");
+                        for (Object client : clients) {
+                            Field socketField = client.getClass().getDeclaredField("socket");
                             socketField.setAccessible(true);
 
                             Socket socket = (Socket) socketField.get(client);

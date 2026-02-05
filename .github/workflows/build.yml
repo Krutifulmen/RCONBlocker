@@ -47,4 +47,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RconBlocker
-          path: build/libs/*-reobf.jar
+          path: build/libs/*.jar

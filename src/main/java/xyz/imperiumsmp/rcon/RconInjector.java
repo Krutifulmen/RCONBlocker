@@ -1,8 +1,6 @@
 package xyz.imperiumsmp.rcon;
 
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.rcon.RconClient;
-
 import java.lang.reflect.Field;
 import java.net.Socket;
 import java.util.List;
@@ -13,20 +11,23 @@ public class RconInjector {
         try {
             MinecraftServer server = MinecraftServer.getServer();
 
-            Field rconThreadField = MinecraftServer.class.getDeclaredField("rconThread");
-            rconThreadField.setAccessible(true);
-            Object rconThread = rconThreadField.get(server);
+            Object rconThread = findRconThread(server);
+            if (rconThread == null) {
+                RconBlockerPlugin.getInstance().getLogger()
+                        .warning("RCON thread not found; RCON may be disabled or unavailable on this server");
+                return;
+            }
 
             Field clientsField = rconThread.getClass().getDeclaredField("clients");
             clientsField.setAccessible(true);
 
-            List<RconClient> clients = (List<RconClient>) clientsField.get(rconThread);
+            List<?> clients = (List<?>) clientsField.get(rconThread);
 
             new Thread(() -> {
                 while (true) {
                     try {
-                        for (RconClient client : clients) {
-                            Field socketField = RconClient.class.getDeclaredField("socket");
+                        for (Object client : clients) {
+                            Field socketField = client.getClass().getDeclaredField("socket");
                             socketField.setAccessible(true);
 
                             Socket socket = (Socket) socketField.get(client);
@@ -47,5 +48,31 @@ public class RconInjector {
             RconBlockerPlugin.getInstance().getLogger().severe("Failed to hook RCON");
             e.printStackTrace();
         }
+    }
+
+    private static Object findRconThread(MinecraftServer server) {
+        Class<?> current = server.getClass();
+        while (current != null && current != Object.class) {
+            for (Field field : current.getDeclaredFields()) {
+                String fieldName = field.getName().toLowerCase();
+                String typeName = field.getType().getName().toLowerCase();
+                if (!fieldName.contains("rcon") && !typeName.contains("rcon")) {
+                    continue;
+                }
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(server);
+                    if (value == null) {
+                        continue;
+                    }
+                    Field clientsField = value.getClass().getDeclaredField("clients");
+                    clientsField.setAccessible(true);
+                    return value;
+                } catch (Exception ignored) {
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return null;
     }
 }

@@ -1,14 +1,5 @@
-name: RCONBlocker
-version: '1.0.0'
-main: xyz.imperiumsmp.rcon.RCONBlocker
-api-version: '1.21'
+name: RconBlocker
+version: 1.0
+main: xyz.imperiumsmp.rcon.RconBlockerPlugin
+api-version: 1.21
 author: ImperiumSMP
-description: Блокирует RCON подключения от неразрешенных IP
-commands:
-  rconblocker:
-    description: Управление плагином RCONBlocker
-    usage: /<command> [reload|list|add|remove|mode|status|test]
-permissions:
-  rconblocker.admin:
-    description: Доступ к командам RCONBlocker
-    default: op

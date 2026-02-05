@@ -1,7 +1,7 @@
 package xyz.imperiumsmp.rcon;
 
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.rcon.thread.RconClient;
+import net.minecraft.server.rcon.RconClient;
 
 import java.lang.reflect.Field;
 import java.net.Socket;
@@ -35,7 +35,6 @@ public class RconInjector {
                             if (!RconBlockerPlugin.getInstance().getAllowedIps().contains(ip)) {
                                 RconBlockerPlugin.getInstance().getLogger()
                                         .warning("Blocked RCON connection from " + ip);
-
                                 socket.close();
                             }
                         }
@@ -45,8 +44,7 @@ public class RconInjector {
             }, "RCON-IP-Checker").start();
 
         } catch (Exception e) {
-            RconBlockerPlugin.getInstance().getLogger()
-                    .severe("Failed to inject into RCON!");
+            RconBlockerPlugin.getInstance().getLogger().severe("Failed to hook RCON");
             e.printStackTrace();
         }
     }

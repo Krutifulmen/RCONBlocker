@@ -13,6 +13,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <!-- Обычные зависимости -->
     <repositories>
         <repository>
             <id>papermc</id>
@@ -20,10 +21,26 @@
         </repository>
     </repositories>
 
+    <!-- ВОТ ЭТО КЛЮЧЕВОЕ -->
+    <pluginRepositories>
+        <pluginRepository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
+            <version>1.21.1-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
     <build>
         <plugins>
 
-            <!-- Java 21 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -34,11 +51,11 @@
                 </configuration>
             </plugin>
 
-            <!-- ВАЖНО: Paperweight для NMS -->
+            <!-- Paperweight даёт доступ к net.minecraft.server -->
             <plugin>
                 <groupId>io.papermc.paperweight</groupId>
                 <artifactId>paperweight-userdev</artifactId>
-                <version>1.7.1</version>
+                <version>1.5.11</version>
                 <executions>
                     <execution>
                         <goals>
@@ -50,22 +67,4 @@
 
         </plugins>
     </build>
-
-    <dependencies>
-        <dependency>
-            <groupId>io.papermc.paper</groupId>
-            <artifactId>paper-api</artifactId>
-            <version>1.21.1-R0.1-SNAPSHOT</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- ДАЁТ net.minecraft.server -->
-        <dependency>
-            <groupId>io.papermc.paper</groupId>
-            <artifactId>dev-bundle</artifactId>
-            <version>1.21.1-R0.1-SNAPSHOT</version>
-            <scope>provided</scope>
-            <classifier>dev-bundle</classifier>
-        </dependency>
-    </dependencies>
 </project>

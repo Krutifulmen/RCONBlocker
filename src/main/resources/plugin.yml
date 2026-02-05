@@ -1,0 +1,13 @@
+name: RCONBlocker
+version: '1.0.0'
+main: xyz.imperiumsmp.rcon.RCONBlocker
+api-version: '1.21'
+author: ImperiumSMP
+description: Ограничивает доступ к RCON по IP-адресам
+permissions:
+  rconblocker.reload:
+    description: Позволяет перезагружать плагин
+    default: op
+  rconblocker.bypass:
+    description: Позволяет обходить блокировку RCON
+    default: op

@@ -13,7 +13,8 @@ public class RconInjector {
 
             Object rconThread = findRconThread(server);
             if (rconThread == null) {
-                RconBlockerPlugin.getInstance().getLogger().severe("Failed to find RCON thread on server");
+                RconBlockerPlugin.getInstance().getLogger()
+                        .warning("RCON thread not found; RCON may be disabled or unavailable on this server");
                 return;
             }
 
@@ -50,23 +51,27 @@ public class RconInjector {
     }
 
     private static Object findRconThread(MinecraftServer server) {
-        for (Field field : MinecraftServer.class.getDeclaredFields()) {
-            String fieldName = field.getName().toLowerCase();
-            String typeName = field.getType().getName().toLowerCase();
-            if (!fieldName.contains("rcon") && !typeName.contains("rcon")) {
-                continue;
-            }
-            try {
-                field.setAccessible(true);
-                Object value = field.get(server);
-                if (value == null) {
+        Class<?> current = server.getClass();
+        while (current != null && current != Object.class) {
+            for (Field field : current.getDeclaredFields()) {
+                String fieldName = field.getName().toLowerCase();
+                String typeName = field.getType().getName().toLowerCase();
+                if (!fieldName.contains("rcon") && !typeName.contains("rcon")) {
                     continue;
                 }
-                Field clientsField = value.getClass().getDeclaredField("clients");
-                clientsField.setAccessible(true);
-                return value;
-            } catch (Exception ignored) {
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(server);
+                    if (value == null) {
+                        continue;
+                    }
+                    Field clientsField = value.getClass().getDeclaredField("clients");
+                    clientsField.setAccessible(true);
+                    return value;
+                } catch (Exception ignored) {
+                }
             }
+            current = current.getSuperclass();
         }
         return null;
     }

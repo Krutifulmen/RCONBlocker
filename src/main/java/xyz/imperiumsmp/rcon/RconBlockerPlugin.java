@@ -15,7 +15,7 @@ public class RconBlockerPlugin extends JavaPlugin {
         saveDefaultConfig();
         allowedIps = getConfig().getStringList("allowed-ips");
 
-        getLogger().info("Injecting into RCON...");
+        getLogger().info("RCON Blocker enabled");
         RconInjector.inject();
     }
 
